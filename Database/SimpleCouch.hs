@@ -1,40 +1,40 @@
 module Database.SimpleCouch where
 
-import Network.HTTP
-import Network.HTTP.Base
-import Network.Stream (Result)
-import Network.URI (parseURI, isURI)
+import Network.HTTP hiding (host)
+import Network.Stream
+import Network.URI
 import Text.ParserCombinators.Parsec 
+import qualified Data.List as L
+import Data.Maybe
 
-
-type Server = String
-
+type Host = String
 type DB = String
+
+moduleName :: String
+moduleName = "Database.SimpleCouch"
 
 contentType :: String
 contentType = "application/json"
 
--- use isAllowedInURI
-
 validToken :: Parser Char
-validToken = letter <|> digit <|> oneOf ":@_-"
+validToken = letter <|> digit <|> oneOf ":@-"
 
 sepBySlashes :: Parser [String]
 sepBySlashes = (many validToken) `sepBy1` (char '/')
 
-validName :: String -> Int -> Bool
-validName s n = case parse sepBySlashes "not needed" s of
-                  Left _ -> False
-                  Right v -> length v == n
+valid :: String -> Int -> Maybe String
+valid s n = if (not $ isURI s) then Nothing
+            else case parse sepBySlashes "" s of
+                   Left _ -> Nothing
+                   Right v -> if (length v < n) then Nothing
+                              else Just $ concat $ L.intersperse "/" $ take n v
 
--- | No trailing slashes allowed
-validDBURL :: String -> Bool
-validDBURL s = validName s 4
+-- | Returns an empty string if error.
+host :: String -> Maybe Host
+host s = valid s 3 
 
-
-validServerURL :: String -> Bool
-validServerURL s = validName s 3
-
+db :: String -> Maybe DB
+db s = valid s 4 
 
 
 putRequest :: String -> Request String
@@ -55,19 +55,20 @@ deleteRequest urlString =
       Nothing -> error ("deleteRequest: Not a valid URL - " ++ urlString)
       Just u  -> mkRequest DELETE u
 
-
-
-
 req :: Request String -> IO String
 req r = simpleHTTP r >>= getResponseBody >>= return
 
-uuid :: String -> IO String
+uuid :: Host -> IO String
 uuid u = do 
   r <- req $ getRequest (u ++ "/_uuids")
   return $ take 32 $ drop 11 r
 
-createDB :: DB -> IO String
-createDB = req . putRequest
+-- ask for a list of uuids
+--uuids :: Host -> Int -> IO [String]
+--uuids u = req $ getRequest (host u ++ "/_uuids")
+
+putDB :: DB -> IO String
+putDB = req . putRequest
 
 deleteDB :: DB -> IO String
 deleteDB = req . deleteRequest
@@ -78,16 +79,27 @@ getDBInfo = req . getRequest
 getDBChanges :: DB -> IO String
 getDBChanges d = req $ getRequest (d ++ "/_changes") 
 
+putDocWithId :: DB 
+             -> String -- ^ the doc ID
+             -> String -- ^ the body of the doc
+             -> IO String 
+putDocWithId d docId body = 
+    case db d of
+      Nothing -> error $ moduleName ++ ".putDoc: invalid database: " ++ d
+      Just v -> do 
+                req $ putRequestWithBody (v ++ "/" ++ docId) body
+
+putDoc :: DB 
+       -> String -- ^ the body of the doc
+       -> IO String 
+putDoc d body = do u <- uuid (fromMaybe "" $ host d) -- fails below if wrong DB
+                   putDocWithId d u body 
+
+-- url = "http://localhost:5984/test/fhad8y7"
+
 -- needs auth
 --compactDB :: String -> DBName -> IO String
 --compactDB urlString dbname = 
 --    simpleHTTP $ postRequest (urlString ++ "/" ++ dbname ++ "/_compact")
 --compactDBViews
 --cleanupDBViews
-
-createDoc :: DB -> String -> IO String 
-createDoc d body = req $ putRequestWithBody d body
-
-
--- createDocWithId
-
