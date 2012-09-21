@@ -1,6 +1,6 @@
 module Database.SimpleCouch where
 
-import Network.HTTP hiding (host)
+import Network.HTTP
 import Network.URI
 import Control.Applicative
 
@@ -46,18 +46,18 @@ db urlString = let between = takeWhile (/= '/') . drop 1
                    trimPath y = y {uriPath = '/' : between (uriPath y)}
                in trimPath <$> rmQF <$> parseAbsoluteURI urlString
 
-type Host = URI
+type Server = URI
 
-host :: String -> Maybe Host 
-host s = rmPath <$> db s
+server :: String -> Maybe Server 
+server s = rmPath <$> db s
 
-uuid :: Host -> IO String
+uuid :: Server -> IO String
 uuid u = do 
   r <- reqWithPath u GET "/_uuids"
   return $ take 32 $ drop 11 r
 
 -- ask for a list of uuids
---uuids :: Host -> Int -> IO [String]
+--uuids :: Server -> Int -> IO [String]
 
 putDB :: DB -> IO String
 putDB = req . mkRequest PUT
