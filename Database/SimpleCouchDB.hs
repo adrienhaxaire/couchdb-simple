@@ -6,6 +6,7 @@ import Control.Applicative
 
 type DocId = String
 type DocBody = String
+type View = String
 
 moduleName :: String
 moduleName = "Database.SimpleCouchDB"
@@ -32,11 +33,19 @@ appendToPath u s = u {uriPath = uriPath u ++ s}
 req :: Request String -> IO String
 req r = simpleHTTP r >>= getResponseBody
 
+reqCT :: Request String -> IO String
+reqCT r = let r' = insertHeader HdrContentType contentType r
+          in simpleHTTP r' >>= getResponseBody
+
 reqWithBody :: URI -> RequestMethod -> DocBody -> IO String
 reqWithBody u m b = req $ setRequestBody (mkRequest m u) (contentType, b)
 
 reqWithPath :: URI -> RequestMethod -> String -> IO String
 reqWithPath u m s = req $ mkRequest m $ appendToPath u s
+
+reqCTWithPath :: URI -> RequestMethod -> String -> IO String
+reqCTWithPath u m s = reqCT $ mkRequest m $ appendToPath u s
+
 
 -- 
 type DB = URI
@@ -51,6 +60,10 @@ type Server = URI
 server :: String -> Maybe Server 
 server s = rmPath <$> db s
 
+
+----------------------------------------------------------------------
+-- Server level miscellaneous methods
+----------------------------------------------------------------------
 uuid :: Server -> IO String
 uuid u = do 
   r <- reqWithPath u GET "/_uuids"
@@ -59,6 +72,12 @@ uuid u = do
 -- ask for a list of uuids
 --uuids :: Server -> Int -> IO [String]
 
+
+
+
+----------------------------------------------------------------------
+-- Database methods
+----------------------------------------------------------------------
 putDB :: DB -> IO String
 putDB = req . mkRequest PUT
 
@@ -72,8 +91,20 @@ getDBChanges :: DB -> IO String
 getDBChanges d = reqWithPath d GET "/_changes" 
 
 compactDB :: DB -> IO String
-compactDB d = reqWithPath d POST "/_compact"
+compactDB d = reqCTWithPath d POST "/_compact"
+  
+compactDBView :: DB -> View -> IO String
+compactDBView d v = if all isAllowedInURI v 
+                    then reqCTWithPath d POST ("/_compact/" ++ v)
+                    else error (moduleName ++ ".compactDBView: View argument is ill-formatted: " ++ v)
 
+cleanupDBView :: DB -> IO String
+cleanupDBView d = reqWithPath d POST "/_"
+
+
+----------------------------------------------------------------------
+-- Database document methods
+----------------------------------------------------------------------
 putDocWithId :: DB -> DocId -> DocBody -> IO String 
 putDocWithId d docId = reqWithBody (appendToPath d ('/' : docId)) PUT
 
@@ -83,15 +114,10 @@ putDoc d body = do
   putDocWithId d u body  
 
 
-
 {-
 
---compactDBViews
---cleanupDBViews
-
-
-url = "http://localhost:5984/test/fhad8y7"
+let mydb = Data.Maybe.fromJust $ db "http://localhost:5984/test"
+let mysrv = Data.Maybe.fromJust $ server "http://localhost:5984"
 
 -}
-
 
