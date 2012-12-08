@@ -103,6 +103,12 @@ cleanupViews d = reqCTWithPath d POST "/_view_cleanup"
 
 execTempView :: DB -> DocBody -> IO String
 execTempView d b = reqWithBody (appendToPath d "/_temp_view") POST b
+
+ensureFullCommit :: DB -> IO String
+ensureFullCommit d = reqCTWithPath d POST "/_ensure_full_commit"
+
+
+
  
 ----------------------------------------------------------------------
 -- Database document methods
