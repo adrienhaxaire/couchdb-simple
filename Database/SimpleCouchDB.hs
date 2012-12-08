@@ -1,4 +1,4 @@
-module Database.SimpleCouch where
+module Database.SimpleCouchDB where
 
 import Network.HTTP
 import Network.URI
@@ -8,7 +8,7 @@ type DocId = String
 type DocBody = String
 
 moduleName :: String
-moduleName = "Database.SimpleCouch"
+moduleName = "Database.SimpleCouchDB"
 
 contentType :: String
 contentType = "application/json"
