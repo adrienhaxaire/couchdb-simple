@@ -13,5 +13,5 @@ cabal-version:       >=1.8
 
 library
   exposed-modules:     Database.SimpleCouchDB
-  build-depends:       base ==4.5.*, HTTP ==4000.2.*, network ==2.3.*, parsec ==3.1.*
+  build-depends:       base ==4.6.*, HTTP ==4000.2.*, network ==2.4.*, parsec ==3.1.*
   
