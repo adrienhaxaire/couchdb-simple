@@ -93,15 +93,17 @@ getDBChanges d = reqWithPath d GET "/_changes"
 compactDB :: DB -> IO String
 compactDB d = reqCTWithPath d POST "/_compact"
   
-compactDBView :: DB -> View -> IO String
-compactDBView d v = if all isAllowedInURI v 
+compactView :: DB -> View -> IO String
+compactView d v = if all isAllowedInURI v 
                     then reqCTWithPath d POST ("/_compact/" ++ v)
                     else error (moduleName ++ ".compactDBView: View argument is ill-formatted: " ++ v)
 
-cleanupDBView :: DB -> IO String
-cleanupDBView d = reqWithPath d POST "/_"
+cleanupViews :: DB -> IO String
+cleanupViews d = reqCTWithPath d POST "/_view_cleanup"
 
-
+execTempView :: DB -> DocBody -> IO String
+execTempView d b = reqWithBody (appendToPath d "/_temp_view") POST b
+ 
 ----------------------------------------------------------------------
 -- Database document methods
 ----------------------------------------------------------------------
