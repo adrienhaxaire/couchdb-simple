@@ -95,8 +95,8 @@ compactDB d = reqCTWithPath d POST "/_compact"
   
 compactView :: DB -> View -> IO String
 compactView d v = if all isAllowedInURI v 
-                    then reqCTWithPath d POST ("/_compact/" ++ v)
-                    else error (moduleName ++ ".compactDBView: View argument is ill-formatted: " ++ v)
+                  then reqCTWithPath d POST ("/_compact/" ++ v)
+                  else error (moduleName ++ ".compactDBView: View argument is ill-formatted: " ++ v)
 
 cleanupViews :: DB -> IO String
 cleanupViews d = reqCTWithPath d POST "/_view_cleanup"
@@ -112,7 +112,16 @@ bulkDocs d b = reqWithBody (appendToPath d "/_bulk_docs") POST b
 
 purgeDB :: DB -> IO String
 purgeDB d = reqCTWithPath d POST "/_purge"
- 
+
+getAllDocs :: DB -> IO String
+getAllDocs d = reqWithPath d GET "/_all_docs"
+
+getAllDocsIncluded :: DB -> DocBody -> IO String
+getAllDocsIncluded d b = reqWithBody (appendToPath d "/_all_docs?include_docs=true") POST b
+
+
+
+
 ----------------------------------------------------------------------
 -- Database document methods
 ----------------------------------------------------------------------
