@@ -110,7 +110,8 @@ ensureFullCommit d = reqCTWithPath d POST "/_ensure_full_commit"
 bulkDocs :: DB -> DocBody -> IO String
 bulkDocs d b = reqWithBody (appendToPath d "/_bulk_docs") POST b
 
-
+purgeDB :: DB -> IO String
+purgeDB d = reqCTWithPath d POST "/_purge"
  
 ----------------------------------------------------------------------
 -- Database document methods
