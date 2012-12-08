@@ -107,6 +107,8 @@ execTempView d b = reqWithBody (appendToPath d "/_temp_view") POST b
 ensureFullCommit :: DB -> IO String
 ensureFullCommit d = reqCTWithPath d POST "/_ensure_full_commit"
 
+bulkDocs :: DB -> DocBody -> IO String
+bulkDocs d b = reqWithBody (appendToPath d "/_bulk_docs") POST b
 
 
  
