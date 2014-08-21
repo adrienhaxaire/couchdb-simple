@@ -94,9 +94,7 @@ compactDB :: DB -> IO String
 compactDB d = reqCTWithPath d POST "/_compact"
   
 compactView :: DB -> View -> IO String
-compactView d v = if all isAllowedInURI v 
-                  then reqCTWithPath d POST ("/_compact/" ++ v)
-                  else error (moduleName ++ ".compactDBView: View argument is ill-formatted: " ++ v)
+compactView d v = reqCTWithPath d POST ("/_compact/" ++ v)
 
 cleanupViews :: DB -> IO String
 cleanupViews d = reqCTWithPath d POST "/_view_cleanup"
@@ -117,9 +115,14 @@ getAllDocs :: DB -> IO String
 getAllDocs d = reqWithPath d GET "/_all_docs"
 
 getAllDocsIncluded :: DB -> DocBody -> IO String
-getAllDocsIncluded d b = reqWithBody (appendToPath d "/_all_docs?include_docs=true") POST b
+getAllDocsIncluded d b = 
+    reqWithBody (appendToPath d "/_all_docs?include_docs=true") POST b
 
-
+getAllDocsBetweenKeys :: DB -> String -> String -> IO String
+getAllDocsBetweenKeys d start end = do
+    let p = "/_all_docs?include_docs=true&startkey=%22" ++ start ++ "%22&startkey=%22" ++ end ++ "%22"
+    print p
+    reqWithPath d GET p
 
 
 ----------------------------------------------------------------------
@@ -136,8 +139,8 @@ putDoc d body = do
 
 {-
 
-let mydb = Data.Maybe.fromJust $ db "http://localhost:5984/test"
-let mysrv = Data.Maybe.fromJust $ server "http://localhost:5984"
+let mydb = Data.Maybe.fromJust $ db "http://127.0.0.1:5984/test"
+let mysrv = Data.Maybe.fromJust $ server "http://127.0.0.1:5984"
 
 -}
 
