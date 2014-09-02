@@ -1,8 +1,8 @@
-name:                SimpleCouchDB
-version:             0.0.1
+name:                couchdb-simple
+version:             1.7.0
 synopsis:            A simple CouchDB library for Haskell.
 description:         A simple CouchDB library for Haskell. It is a thin layer on top of CouchDB's HTTP API.
-homepage:            https://github.com/adrienhaxaire/simple-couchdb
+homepage:            https://github.com/adrienhaxaire/couchdb-simple
 license:             BSD3
 license-file:        LICENSE
 author:              Adrien Haxaire
@@ -12,6 +12,11 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  exposed-modules:     Database.SimpleCouchDB
-  build-depends:       base ==4.6.*, HTTP ==4000.2.*, network ==2.4.*, parsec ==3.1.*
-  
+  exposed-modules:     Database.CouchDB.Simple
+  build-depends:
+     base >= 4 && < 5,
+     network >= 2.4 && < 3,
+     network-uri >= 2.6,
+     HTTP >= 4000.2
+
+
