@@ -1,5 +1,5 @@
 name:                couchdb-simple
-version:             1.7.0
+version:             1.7.0.0
 synopsis:            A simple CouchDB library for Haskell.
 description:         A simple CouchDB library for Haskell. It is a thin layer on top of CouchDB's HTTP API.
 homepage:            https://github.com/adrienhaxaire/couchdb-simple
