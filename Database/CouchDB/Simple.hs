@@ -47,9 +47,10 @@ reqCTWithPath :: URI -> RequestMethod -> String -> IO String
 reqCTWithPath u m s = reqCT $ mkRequest m $ appendToPath u s
 
 
--- 
+--
 type DB = URI
 
+-- | Returns a DB if its URL is valid
 db :: String -> Maybe DB
 db urlString = let between = takeWhile (/= '/') . drop 1
                    trimPath y = y {uriPath = '/' : between (uriPath y)}
@@ -57,21 +58,66 @@ db urlString = let between = takeWhile (/= '/') . drop 1
 
 type Server = URI
 
+-- | Returns a Server if its URL is valid
 server :: String -> Maybe Server 
 server s = rmPath <$> db s
 
 
 ----------------------------------------------------------------------
--- Server level miscellaneous methods
+-- Server methods
 ----------------------------------------------------------------------
+
+-- | Accessing the root of a CouchDB instance returns meta information about the instance. The response is a JSON structure containing information about the server, including a welcome message and the version of the server.
+getServerInfo :: Server -> IO String
+getServerInfo = req . mkRequest GET
+
+
+-- | List of running tasks, including the task type, name, status and process ID. The result is a JSON array of the currently running tasks, with each task being described with a single object. Depending on operation type set of response object fields might be different.
+activeTasks :: Server -> IO String
+activeTasks s = reqWithPath s GET "/_active_tasks" 
+
+-- | Returns a list of all the databases in the CouchDB instance.
+getAllDBs :: Server -> IO String
+getAllDBs s = reqWithPath s GET "/_all_dbs"
+
+
+-- | Returns a list of all database events in the CouchDB instance.
+getUpdates :: Server -> IO String
+getUpdates s = reqWithPath s GET "/_db_updates"
+
+-- | Gets the CouchDB log, equivalent to accessing the local log file of the corresponding CouchDB instance.
+getLog :: Server -> IO String
+getLog s = reqWithPath s GET "/_log"
+
+-- TODO: replicate
+
+-- TODO: restart
+
+{- TODO: stats
+-- | The _stats resource returns a JSON object containing the statistics for the running server. The object is structured with top-level sections collating the statistics for a range of entries, with each individual statistic being easily identified, and the content of each statistic is self-describing
+getStats :: Server -> IO String
+getStats s = reqWithPath s GET "/_stats"
+-}
+
+-- | Accesses the built-in Futon administration interface for CouchDB.
+utils :: Server -> IO String
+utils s = reqWithPath s GET "/_utils/"
+
+-- | Requests one or more Universally Unique Identifiers (UUIDs) from the CouchDB instance. The response is a JSON object providing a list of UUIDs.
+uuids :: Server -> IO String
+uuids s = reqWithPath s GET "/_uuids/"
+-- ask for a list of uuids instead
+--uuids :: Server -> Int -> IO [String]
+
+-- | Request a single UUID.
 uuid :: Server -> IO String
 uuid u = do 
   r <- reqWithPath u GET "/_uuids"
   return $ take 32 $ drop 11 r
 
--- ask for a list of uuids
---uuids :: Server -> Int -> IO [String]
-
+-- | Binary content for the favicon.ico site icon.
+favicon :: Server -> IO String
+favicon s = reqWithPath s GET "/_uuids/"
 
 
 
@@ -111,6 +157,7 @@ bulkDocs d b = reqWithBody (appendToPath d "/_bulk_docs") POST b
 purgeDB :: DB -> IO String
 purgeDB d = reqCTWithPath d POST "/_purge"
 
+-- | Returns a built-in view of all documents in this database
 getAllDocs :: DB -> IO String
 getAllDocs d = reqWithPath d GET "/_all_docs"
 
