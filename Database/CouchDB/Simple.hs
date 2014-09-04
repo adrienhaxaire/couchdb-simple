@@ -67,12 +67,17 @@ server s = rmPath <$> db s
 -- Server methods
 ----------------------------------------------------------------------
 
--- | Accessing the root of a CouchDB instance returns meta information about the instance. The response is a JSON structure containing information about the server, including a welcome message and the version of the server.
+-- | Accessing the root of a CouchDB instance returns meta information about the
+-- instance. The response is a JSON structure containing information about the
+-- server, including a welcome message and the version of the server.
 getServerInfo :: Server -> IO String
 getServerInfo = req . mkRequest GET
 
 
--- | List of running tasks, including the task type, name, status and process ID. The result is a JSON array of the currently running tasks, with each task being described with a single object. Depending on operation type set of response object fields might be different.
+-- | List of running tasks, including the task type, name, status and process
+-- ID. The result is a JSON array of the currently running tasks, with each task
+-- being described with a single object. Depending on operation type set of
+-- response object fields might be different.
 activeTasks :: Server -> IO String
 activeTasks s = reqWithPath s GET "/_active_tasks" 
 
@@ -85,7 +90,8 @@ getAllDBs s = reqWithPath s GET "/_all_dbs"
 getUpdates :: Server -> IO String
 getUpdates s = reqWithPath s GET "/_db_updates"
 
--- | Gets the CouchDB log, equivalent to accessing the local log file of the corresponding CouchDB instance.
+-- | Gets the CouchDB log, equivalent to accessing the local log file of the
+-- corresponding CouchDB instance.
 getLog :: Server -> IO String
 getLog s = reqWithPath s GET "/_log"
 
@@ -94,7 +100,10 @@ getLog s = reqWithPath s GET "/_log"
 -- TODO: restart
 
 {- TODO: stats
--- | The _stats resource returns a JSON object containing the statistics for the running server. The object is structured with top-level sections collating the statistics for a range of entries, with each individual statistic being easily identified, and the content of each statistic is self-describing
+-- | The _stats resource returns a JSON object containing the statistics for the
+-- running server. The object is structured with top-level sections collating
+-- the statistics for a range of entries, with each individual statistic being
+-- easily identified, and the content of each statistic is self-describing
 getStats :: Server -> IO String
 getStats s = reqWithPath s GET "/_stats"
 -}
@@ -103,7 +112,8 @@ getStats s = reqWithPath s GET "/_stats"
 utils :: Server -> IO String
 utils s = reqWithPath s GET "/_utils/"
 
--- | Requests one or more Universally Unique Identifiers (UUIDs) from the CouchDB instance. The response is a JSON object providing a list of UUIDs.
+-- | Requests one or more Universally Unique Identifiers (UUIDs) from the
+-- CouchDB instance. The response is a JSON object providing a list of UUIDs.
 uuids :: Server -> IO String
 uuids s = reqWithPath s GET "/_uuids/"
 -- ask for a list of uuids instead
