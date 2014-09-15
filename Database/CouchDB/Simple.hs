@@ -1,50 +1,66 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Database.CouchDB.Simple where
 
-import Network.HTTP
-import Network.URI
-import Control.Applicative
+import Control.Monad
+import System.IO
 
-type DocId = String
-type DocBody = String
-type View = String
+import Network.Socket hiding (send, sendTo, recv, recvFrom)
+import Network.Socket.ByteString 
+import qualified Data.ByteString.Char8 as C
 
 moduleName :: String
 moduleName = "Database.CouchDB.Simple"
 
-contentType :: String
-contentType = "application/json"
+data Server = Server { host :: String
+                     , port :: String}
+              deriving Show
 
--- local helpers
-rmQuery :: URI -> URI
-rmQuery u = u {uriQuery = ""}
+-- smart constructor:
+-- mkServer
 
-rmFragment :: URI -> URI
-rmFragment u = u {uriFragment = ""}
+data DB = DB { server :: Server
+             , name :: String}
+          deriving Show
 
-rmQF :: URI -> URI
-rmQF = rmFragment . rmQuery
+-- not so smart constructor, checks to come
+mkDB :: Server -> String -> Maybe DB
+mkDB s n = Just $ DB s n
 
-rmPath :: URI -> URI
-rmPath u = u {uriPath = ""}
+localDB :: String -> Maybe DB
+localDB = Just . DB (Server "127.0.0.1" "5984")
 
-appendToPath :: URI -> String -> URI
-appendToPath u s = u {uriPath = uriPath u ++ s}
+contentType :: String -> String
+contentType s = s ++ "Content-Type: application/json\r\n"
 
-req :: Request String -> IO String
-req r = simpleHTTP r >>= getResponseBody
+getRequest :: String -> C.ByteString
+getRequest s = C.pack $ "GET /" ++ s ++ " HTTP/1.1\r\nConnection: close\r\n\r\n"
 
-reqCT :: Request String -> IO String
-reqCT r = let r' = insertHeader HdrContentType contentType r
-          in simpleHTTP r' >>= getResponseBody
+type Header = C.ByteString
+type Body = C.ByteString
 
-reqWithBody :: URI -> RequestMethod -> DocBody -> IO String
-reqWithBody u m b = req $ setRequestBody (mkRequest m u) (contentType, b)
+data Response = Response {header :: Header
+                         , body :: Body}
+              deriving Show
 
-reqWithPath :: URI -> RequestMethod -> String -> IO String
-reqWithPath u m s = req $ mkRequest m $ appendToPath u s
+get :: Server -> String -> IO Response
+get (Server h p) loc = withSocketsDo $
+    do addrinfos <- getAddrInfo (Just defaultHints) (Just h) (Just p)
+       let serveraddr = head addrinfos
+       sock <- socket (addrFamily serveraddr) Stream defaultProtocol
+       connect sock (addrAddress serveraddr)
+       sendAll sock $ getRequest loc
+       hdr <- recv sock 1024
+       bdy <- recv sock (256 * 1024)
+       close sock
+       return $ Response hdr bdy
 
-reqCTWithPath :: URI -> RequestMethod -> String -> IO String
-reqCTWithPath u m s = reqCT $ mkRequest m $ appendToPath u s
+
+
+
+
+
+
+{-
 
 
 --
@@ -109,25 +125,33 @@ getStats s = reqWithPath s GET "/_stats"
 -}
 
 -- | Accesses the built-in Futon administration interface for CouchDB.
-utils :: Server -> IO String
-utils s = reqWithPath s GET "/_utils/"
+getUtils :: Server -> IO String
+getUtils s = reqWithPath s GET "/_utils/"
+
+
+data UUIDs = UUIDs {uuids :: [String]} deriving (Show, Generic)
+instance ToJSON UUIDs
+instance FromJSON UUIDs
 
 -- | Requests one or more Universally Unique Identifiers (UUIDs) from the
 -- CouchDB instance. The response is a JSON object providing a list of UUIDs.
-uuids :: Server -> IO String
-uuids s = reqWithPath s GET "/_uuids/"
--- ask for a list of uuids instead
---uuids :: Server -> Int -> IO [String]
+getUuids :: Int -> Server -> IO [String]
+getUuids n s = do
+    rsp <- reqWithPath s GET ("/_uuids?count=" ++ show n)
+    case decode $ ByteString.pack rsp of
+      Just xs -> return $ uuids xs
+      Nothing -> return []
 
 -- | Request a single UUID.
-uuid :: Server -> IO String
-uuid u = do 
-  r <- reqWithPath u GET "/_uuids"
-  return $ take 32 $ drop 11 r
+getUuid :: Server -> IO String
+getUuid s = do
+  [rsp] <- getUuids 1 s
+  return rsp
+
 
 -- | Binary content for the favicon.ico site icon.
-favicon :: Server -> IO String
-favicon s = reqWithPath s GET "/_uuids/"
+getFavicon :: Server -> IO String
+getFavicon s = reqWithPath s GET "/favicon.ico"
 
 
 
@@ -188,10 +212,13 @@ getAllDocsBetweenKeys d start end = do
 putDocWithId :: DB -> DocId -> DocBody -> IO String 
 putDocWithId d docId = reqWithBody (appendToPath d ('/' : docId)) PUT
 
+
+{-
 putDoc :: DB -> DocBody -> IO String 
 putDoc d body = do
-  u <- uuid $ rmPath d
+  u <- getUuid $ rmPath d
   putDocWithId d u body  
+-}
 
 
 {-
@@ -201,3 +228,32 @@ let mysrv = Data.Maybe.fromJust $ server "http://127.0.0.1:5984"
 
 -}
 
+{-
+"{\"couchdb\":\"Welcome\",
+\"uuid\":\"e4f7ebb1496241537475c0b1451cf124\",
+\"version\":\"1.6.0\",
+\"vendor\":{\"version\":\"1.6.0\",
+             \"name\":\"The Apache Software Foundation\"}}\n"
+
+-}
+
+
+
+data Vendor = Vendor { vendorVersion :: String
+                     , vendorName :: String}
+            deriving (Show, Generic)
+
+instance ToJSON Vendor
+instance FromJSON Vendor
+
+data ServerInfo = ServerInfo { serverInfoWelcome :: String
+                             , serverInfoUuid :: String
+                             , serverInfoVersion :: String
+                             , serverInfoVendor :: Vendor}
+            deriving (Show, Generic)
+
+instance ToJSON ServerInfo
+instance FromJSON ServerInfo
+
+
+-}
