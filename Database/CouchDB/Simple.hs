@@ -3,6 +3,8 @@ module Database.CouchDB.Simple where
 
 import Control.Monad
 import System.IO
+import Control.Exception
+import Data.Maybe
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString 
@@ -11,30 +13,47 @@ import qualified Data.ByteString.Char8 as C
 moduleName :: String
 moduleName = "Database.CouchDB.Simple"
 
-data Server = Server { host :: String
-                     , port :: String}
+data Server = Server { hostname :: String
+                     , port :: Int
+                     , info :: AddrInfo}
               deriving Show
 
--- smart constructor:
--- mkServer
+type Hostname = String
+type Port = Int
+
+-- | Server smart constructor, needs IO operation to check it is found
+mkServer :: Hostname -> Port -> IO (Maybe Server)
+mkServer h p = withSocketsDo $ do
+                 res <- try $ getAddrInfo (Just defaultHints) (Just h) (Just $ show p) 
+                     :: IO (Either SomeException [AddrInfo])
+                 case res of
+                    Left _ -> return Nothing
+                    Right infos -> let s = Server h p (head infos)
+                                   in return $ Just s
+
 
 data DB = DB { server :: Server
              , name :: String}
           deriving Show
 
 -- not so smart constructor, checks to come
-mkDB :: Server -> String -> Maybe DB
-mkDB s n = Just $ DB s n
+mkDB :: Server -> String -> IO (Maybe DB)
+mkDB s n = do 
+  rsp <- get s n
+  if (C.length $ snd $ C.breakSubstring (C.pack n) (body rsp)) == 0
+  then return Nothing
+  else return $ Just (DB s n)
 
-localDB :: String -> Maybe DB
-localDB = Just . DB (Server "127.0.0.1" "5984")
+
+--localDB :: String -> Maybe DB
+--localDB = Just . DB (Server "127.0.0.1" "5984")
 
 contentType :: String -> String
 contentType s = s ++ "Content-Type: application/json\r\n"
 
 getRequest :: Server -> String -> C.ByteString
 getRequest s loc = C.pack $ concat ["GET /" ++ loc ++ " HTTP/1.1\r\n"
-                                   , "Host: " ++ host s ++ "\r\n"
+                                   , "Host: " ++ hostname s ++ "\r\n"
                                    ,"Connection: close\r\n"
                                    , "\r\n\r\n"]
 
@@ -46,16 +65,14 @@ data Response = Response {header :: Header
               deriving Show
 
 get :: Server -> String -> IO Response
-get s@(Server h p) loc = withSocketsDo $
-    do addrinfos <- getAddrInfo (Just defaultHints) (Just h) (Just p)
-       let serveraddr = head addrinfos
-       sock <- socket (addrFamily serveraddr) Stream defaultProtocol
-       connect sock (addrAddress serveraddr)
+get s@(Server h p i) loc = withSocketsDo $
+    do sock <- socket (addrFamily i) Stream defaultProtocol
+       connect sock (addrAddress i)
        sendAll sock $ getRequest s loc
-       hdr <- recv sock 4096
-       bdy <- recvAll sock
+       received <- recvAll sock
        close sock
-       return $ Response hdr bdy
+       let (hdr, bdy) = C.breakSubstring (C.pack "\r\n\r\n") received 
+       return $ Response hdr (C.drop 4 bdy)
 
 recvAll :: Socket -> IO C.ByteString
 recvAll sock = go []
