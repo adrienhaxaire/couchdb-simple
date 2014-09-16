@@ -32,8 +32,11 @@ localDB = Just . DB (Server "127.0.0.1" "5984")
 contentType :: String -> String
 contentType s = s ++ "Content-Type: application/json\r\n"
 
-getRequest :: String -> C.ByteString
-getRequest s = C.pack $ "GET /" ++ s ++ " HTTP/1.1\r\nConnection: close\r\n\r\n"
+getRequest :: Server -> String -> C.ByteString
+getRequest s loc = C.pack $ concat ["GET /" ++ loc ++ " HTTP/1.1\r\n"
+                                   , "Host: " ++ host s ++ "\r\n"
+                                   ,"Connection: close\r\n"
+                                   , "\r\n\r\n"]
 
 type Header = C.ByteString
 type Body = C.ByteString
@@ -43,20 +46,25 @@ data Response = Response {header :: Header
               deriving Show
 
 get :: Server -> String -> IO Response
-get (Server h p) loc = withSocketsDo $
+get s@(Server h p) loc = withSocketsDo $
     do addrinfos <- getAddrInfo (Just defaultHints) (Just h) (Just p)
        let serveraddr = head addrinfos
        sock <- socket (addrFamily serveraddr) Stream defaultProtocol
        connect sock (addrAddress serveraddr)
-       sendAll sock $ getRequest loc
-       hdr <- recv sock 1024
-       bdy <- recv sock (256 * 1024)
+       sendAll sock $ getRequest s loc
+       hdr <- recv sock 4096
+       bdy <- recvAll sock
        close sock
        return $ Response hdr bdy
 
-
-
-
+recvAll :: Socket -> IO C.ByteString
+recvAll sock = go []
+    where
+      go xs = do
+        x <- recv sock 1024 
+        if C.length x == 0
+        then return $ C.concat xs
+        else go (xs ++ [x])
 
 
 
