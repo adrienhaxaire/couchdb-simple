@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 module Database.CouchDB.Simple where
 
 import Control.Monad
@@ -21,7 +20,7 @@ data Server = Server { hostname :: String
 type Hostname = String
 type Port = Int
 
--- | Server smart constructor, needs IO operation to check it is found
+-- | Server smart constructor, needs IO operation to check that it is found
 mkServer :: Hostname -> Port -> IO (Maybe Server)
 mkServer h p = withSocketsDo $ do
                  res <- try $ getAddrInfo (Just defaultHints) (Just h) (Just $ show p) 
@@ -31,22 +30,32 @@ mkServer h p = withSocketsDo $ do
                     Right infos -> let s = Server h p (head infos)
                                    in return $ Just s
 
+-- | Creates maybe a Server at 127.0.0.1:5984
+mkLocalServer :: IO (Maybe Server)
+mkLocalServer = mkServer "127.0.0.1" 5984
+  
 
-data DB = DB { server :: Server
-             , name :: String}
-          deriving Show
+data Database = Database { server :: Server
+                         , name :: String}
+                deriving Show
 
--- not so smart constructor, checks to come
-mkDB :: Server -> String -> IO (Maybe DB)
-mkDB s n = do 
+-- | Database smart constructor, needs IO operation to check that it is found
+mkDatabase :: Server -> String -> IO (Maybe Database)
+mkDatabase s n = do 
   rsp <- get s n
-  if (C.length $ snd $ C.breakSubstring (C.pack n) (body rsp)) == 0
-  then return Nothing
-  else return $ Just (DB s n)
+  return
+    (if C.length (snd $ C.breakSubstring (C.pack n) (body rsp)) == 0
+       then Nothing else Just (Database s n))
 
+-- | Creates maybe a Database on the local server
+mkLocalDatabase :: String -- ^ name of the database
+                -> IO (Maybe Database)
+mkLocalDatabase name = do
+  maybeServer <- mkLocalServer
+  case maybeServer of
+    Nothing -> return Nothing
+    Just srv -> mkDatabase srv name
 
---localDB :: String -> Maybe DB
---localDB = Just . DB (Server "127.0.0.1" "5984")
 
 contentType :: String -> String
 contentType s = s ++ "Content-Type: application/json\r\n"
@@ -55,7 +64,7 @@ getRequest :: Server -> String -> C.ByteString
 getRequest s loc = C.pack $ concat ["GET /" ++ loc ++ " HTTP/1.1\r\n"
                                    , "Host: " ++ hostname s ++ "\r\n"
                                    ,"Connection: close\r\n"
-                                   , "\r\n\r\n"]
+                                   , "\r\n"]
 
 type Header = C.ByteString
 type Body = C.ByteString
@@ -77,31 +86,12 @@ get s@(Server h p i) loc = withSocketsDo $
 recvAll :: Socket -> IO C.ByteString
 recvAll sock = go []
     where
+      go :: [C.ByteString] -> IO C.ByteString
       go xs = do
         x <- recv sock 1024 
-        if C.length x == 0
-        then return $ C.concat xs
-        else go (xs ++ [x])
-
-
-
-{-
-
-
---
-type DB = URI
-
--- | Returns a DB if its URL is valid
-db :: String -> Maybe DB
-db urlString = let between = takeWhile (/= '/') . drop 1
-                   trimPath y = y {uriPath = '/' : between (uriPath y)}
-               in trimPath <$> rmQF <$> parseAbsoluteURI urlString
-
-type Server = URI
-
--- | Returns a Server if its URL is valid
-server :: String -> Maybe Server 
-server s = rmPath <$> db s
+        case C.length x of
+          0 -> return $ C.concat xs
+          _ -> go (xs ++ [x])
 
 
 ----------------------------------------------------------------------
@@ -111,30 +101,29 @@ server s = rmPath <$> db s
 -- | Accessing the root of a CouchDB instance returns meta information about the
 -- instance. The response is a JSON structure containing information about the
 -- server, including a welcome message and the version of the server.
-getServerInfo :: Server -> IO String
-getServerInfo = req . mkRequest GET
-
+serverInfo :: Server -> IO Response
+serverInfo s = get s ""
 
 -- | List of running tasks, including the task type, name, status and process
 -- ID. The result is a JSON array of the currently running tasks, with each task
 -- being described with a single object. Depending on operation type set of
 -- response object fields might be different.
-activeTasks :: Server -> IO String
-activeTasks s = reqWithPath s GET "/_active_tasks" 
+activeTasks :: Server -> IO Response
+activeTasks s = get s "_active_tasks" 
 
 -- | Returns a list of all the databases in the CouchDB instance.
-getAllDBs :: Server -> IO String
-getAllDBs s = reqWithPath s GET "/_all_dbs"
-
+allDBs :: Server -> IO Response
+allDBs s = get s "_all_dbs"
 
 -- | Returns a list of all database events in the CouchDB instance.
-getUpdates :: Server -> IO String
-getUpdates s = reqWithPath s GET "/_db_updates"
+dbUpdates :: Server -> IO Response
+dbUpdates s = get s "_db_updates"
 
 -- | Gets the CouchDB log, equivalent to accessing the local log file of the
 -- corresponding CouchDB instance.
-getLog :: Server -> IO String
-getLog s = reqWithPath s GET "/_log"
+serverLog :: Server -> IO Response
+serverLog s = get s "_log"
+
 
 -- TODO: replicate
 
@@ -149,11 +138,11 @@ getStats :: Server -> IO String
 getStats s = reqWithPath s GET "/_stats"
 -}
 
--- | Accesses the built-in Futon administration interface for CouchDB.
-getUtils :: Server -> IO String
-getUtils s = reqWithPath s GET "/_utils/"
+-- | Accesses the built-in Futon administration interface for CouchDB. Supposed to be accessed through a browser.
+getUtils :: Server -> IO Response
+getUtils s = get s "_utils/"
 
-
+{-
 data UUIDs = UUIDs {uuids :: [String]} deriving (Show, Generic)
 instance ToJSON UUIDs
 instance FromJSON UUIDs
@@ -183,48 +172,48 @@ getFavicon s = reqWithPath s GET "/favicon.ico"
 ----------------------------------------------------------------------
 -- Database methods
 ----------------------------------------------------------------------
-putDB :: DB -> IO String
+putDB :: Database -> IO String
 putDB = req . mkRequest PUT
 
-deleteDB :: DB -> IO String
+deleteDB :: Database -> IO String
 deleteDB = req . mkRequest DELETE
 
-getDBInfo :: DB -> IO String
+getDBInfo :: Database -> IO String
 getDBInfo = req . mkRequest GET
 
-getDBChanges :: DB -> IO String
+getDBChanges :: Database -> IO String
 getDBChanges d = reqWithPath d GET "/_changes" 
 
-compactDB :: DB -> IO String
+compactDB :: Database -> IO String
 compactDB d = reqCTWithPath d POST "/_compact"
   
-compactView :: DB -> View -> IO String
+compactView :: Database -> View -> IO String
 compactView d v = reqCTWithPath d POST ("/_compact/" ++ v)
 
-cleanupViews :: DB -> IO String
+cleanupViews :: Database -> IO String
 cleanupViews d = reqCTWithPath d POST "/_view_cleanup"
 
-execTempView :: DB -> DocBody -> IO String
+execTempView :: Database -> DocBody -> IO String
 execTempView d b = reqWithBody (appendToPath d "/_temp_view") POST b
 
-ensureFullCommit :: DB -> IO String
+ensureFullCommit :: Database -> IO String
 ensureFullCommit d = reqCTWithPath d POST "/_ensure_full_commit"
 
-bulkDocs :: DB -> DocBody -> IO String
+bulkDocs :: Database -> DocBody -> IO String
 bulkDocs d b = reqWithBody (appendToPath d "/_bulk_docs") POST b
 
-purgeDB :: DB -> IO String
+purgeDB :: Database -> IO String
 purgeDB d = reqCTWithPath d POST "/_purge"
 
 -- | Returns a built-in view of all documents in this database
-getAllDocs :: DB -> IO String
+getAllDocs :: Database -> IO String
 getAllDocs d = reqWithPath d GET "/_all_docs"
 
-getAllDocsIncluded :: DB -> DocBody -> IO String
+getAllDocsIncluded :: Database -> DocBody -> IO String
 getAllDocsIncluded d b = 
     reqWithBody (appendToPath d "/_all_docs?include_docs=true") POST b
 
-getAllDocsBetweenKeys :: DB -> String -> String -> IO String
+getAllDocsBetweenKeys :: Database -> String -> String -> IO String
 getAllDocsBetweenKeys d start end = do
     let p = "/_all_docs?include_docs=true&startkey=%22" ++ start ++ "%22&startkey=%22" ++ end ++ "%22"
     print p
@@ -234,51 +223,16 @@ getAllDocsBetweenKeys d start end = do
 ----------------------------------------------------------------------
 -- Database document methods
 ----------------------------------------------------------------------
-putDocWithId :: DB -> DocId -> DocBody -> IO String 
+putDocWithId :: Database -> DocId -> DocBody -> IO String 
 putDocWithId d docId = reqWithBody (appendToPath d ('/' : docId)) PUT
 
 
 {-
-putDoc :: DB -> DocBody -> IO String 
+putDoc :: Database -> DocBody -> IO String 
 putDoc d body = do
   u <- getUuid $ rmPath d
   putDocWithId d u body  
 -}
 
-
-{-
-
-let mydb = Data.Maybe.fromJust $ db "http://127.0.0.1:5984/test"
-let mysrv = Data.Maybe.fromJust $ server "http://127.0.0.1:5984"
-
 -}
 
-{-
-"{\"couchdb\":\"Welcome\",
-\"uuid\":\"e4f7ebb1496241537475c0b1451cf124\",
-\"version\":\"1.6.0\",
-\"vendor\":{\"version\":\"1.6.0\",
-             \"name\":\"The Apache Software Foundation\"}}\n"
-
--}
-
-
-
-data Vendor = Vendor { vendorVersion :: String
-                     , vendorName :: String}
-            deriving (Show, Generic)
-
-instance ToJSON Vendor
-instance FromJSON Vendor
-
-data ServerInfo = ServerInfo { serverInfoWelcome :: String
-                             , serverInfoUuid :: String
-                             , serverInfoVersion :: String
-                             , serverInfoVendor :: Vendor}
-            deriving (Show, Generic)
-
-instance ToJSON ServerInfo
-instance FromJSON ServerInfo
-
-
--}
